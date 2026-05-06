@@ -20,10 +20,19 @@ const waveLabelEl = document.getElementById("waveLabel");
 const comboLabelEl = document.getElementById("comboLabel");
 const soundBtn = document.getElementById("soundBtn");
 const diffBtns = document.querySelectorAll(".diff-btn");
+const bombBadge = document.getElementById("bombBadge");
+const bombCountEl = document.getElementById("bombCount");
+const magnetBadge = document.getElementById("magnetBadge");
+const magnetTimerEl = document.getElementById("magnetTimer");
+const boostBadge = document.getElementById("boostBadge");
+const boostTimerBadgeEl = document.getElementById("boostTimerBadge");
+const gradeLabel = document.getElementById("gradeLabel");
 let audioCtx = null;
 let soundOn = true;
 const DIFF = { easy:{spawnMul:1.4,speedMul:0.7,dmgMul:0.7}, normal:{spawnMul:1,speedMul:1,dmgMul:1}, hard:{spawnMul:0.7,speedMul:1.35,dmgMul:1.3} };
 let difficulty = 'normal';
+const floatingTexts = [];
+const nebulae = [];
 
 const pauseIcon = `
   <svg viewBox="0 0 24 24" aria-hidden="true">
@@ -55,7 +64,8 @@ const game = {
   shardsCollected: 0,
   meteorsDodged: 0,
   bombs: 0,
-  boostTimer: 0
+  boostTimer: 0,
+  magnetTimer: 0
 };
 
 const player = {
@@ -84,6 +94,7 @@ const objects = [];
 const particles = [];
 let stars = [];
 let lastTime = performance.now();
+buildNebulae();
 
 bestValue.textContent = game.best;
 resizeCanvas();
@@ -138,6 +149,8 @@ function startGame() {
   game.meteorsDodged = 0;
   game.bombs = 0;
   game.boostTimer = 0;
+  game.magnetTimer = 0;
+  floatingTexts.length = 0;
   objects.length = 0;
   particles.length = 0;
   resetPlayer();
@@ -179,6 +192,7 @@ function endGame(completed) {
   if(finalShards) finalShards.textContent = game.shardsCollected;
   if(finalDodged) finalDodged.textContent = game.meteorsDodged;
   bestValue.textContent = game.best;
+  if(gradeLabel){ const g=calcGrade(game.score); gradeLabel.textContent=g; gradeLabel.className='grade'+(g==='S'?' grade-s':g==='D'?' grade-d':''); }
   setPanelVisibility(endPanel, true);
   setPauseIcon(true);
   playSound(completed?660:220, 0.4);
@@ -189,6 +203,7 @@ function updateGame(dt) {
   game.remaining = Math.max(0, 60 - game.elapsed);
   game.spawnClock -= dt;
   game.boostTimer = Math.max(0, game.boostTimer - dt);
+  game.magnetTimer = Math.max(0, game.magnetTimer - dt);
   player.invulnerable = Math.max(0, player.invulnerable - dt);
   game.shakeTimer = Math.max(0, game.shakeTimer - dt);
   const newWave = Math.floor(game.elapsed / 15) + 1;
@@ -202,6 +217,8 @@ function updateGame(dt) {
   updatePlayer(dt);
   updateObjects(dt);
   checkCollisions();
+  if (game.magnetTimer > 0) attractShards(dt);
+  updateFloatingTexts(dt);
   if (Math.random() < 0.45) addEngineParticle();
   if (game.remaining <= 0) endGame(true);
   updateHud();
@@ -288,12 +305,22 @@ function checkCollisions() {
       playSound(660, 0.2);
       continue;
     }
+    if (item.type === "magnet") {
+      game.magnetTimer = 6;
+      addBurst(item.x, item.y, "#ff6fff", 20);
+      showToast("🧲 MAGNET! Shards attracted!");
+      playSound(550, 0.2);
+      continue;
+    }
     game.combo += 1;
     game.maxCombo = Math.max(game.maxCombo, game.combo);
-    game.score += 12 + game.combo * 3;
+    const isGold = item.type === "golden";
+    const pts = isGold ? 50 + game.combo * 5 : 12 + game.combo * 3;
+    game.score += pts;
     game.shardsCollected++;
-    addBurst(item.x, item.y, item.color, 16);
-    playSound(520 + game.combo * 40, 0.1);
+    addBurst(item.x, item.y, item.color, isGold ? 24 : 16);
+    addFloatingText(item.x, item.y - 20, "+" + pts, item.color);
+    playSound(isGold ? 880 : 520 + game.combo * 40, isGold ? 0.2 : 0.1);
     if (game.combo > 0 && game.combo % 5 === 0) showCombo(game.combo);
   }
 }
@@ -303,10 +330,12 @@ function spawnObject() {
   const roll = Math.random();
   let type = "shard";
   if (roll > 0.67 - pressure * 0.1) type = "meteor";
-  else if (roll < 0.04) type = "bomb";
-  else if (roll < 0.08) type = "boost";
-  else if (roll < 0.15) type = "cell";
-  const radiusMap = {meteor:random(18,31),cell:16,bomb:14,boost:14,shard:random(11,17)};
+  else if (roll < 0.025) type = "bomb";
+  else if (roll < 0.05) type = "boost";
+  else if (roll < 0.065) type = "magnet";
+  else if (roll < 0.09) type = "golden";
+  else if (roll < 0.16) type = "cell";
+  const radiusMap = {meteor:random(18,31),cell:16,bomb:14,boost:14,magnet:15,golden:random(13,18),shard:random(11,17)};
   const radius = radiusMap[type];
   const d = DIFF[difficulty];
   const speed = (random(120,220) + pressure*130) * d.speedMul;
@@ -349,8 +378,8 @@ function draw() {
   drawSpace();
   drawObjects();
   drawParticles();
+  drawFloatingTexts();
   drawPlayer();
-
   if (game.state === "paused") {
     drawCenterLabel("PAUSED", "rgba(8, 10, 14, 0.55)");
   }
@@ -384,6 +413,15 @@ function drawSpace() {
     ctx.fillRect(star.x, star.y, star.size, star.size);
   }
   ctx.globalAlpha = 1;
+  for (const nb of nebulae) {
+    ctx.globalAlpha = nb.alpha * 0.12;
+    const grd = ctx.createRadialGradient(nb.x, nb.y, 0, nb.x, nb.y, nb.r);
+    grd.addColorStop(0, nb.color);
+    grd.addColorStop(1, 'transparent');
+    ctx.fillStyle = grd;
+    ctx.fillRect(nb.x - nb.r, nb.y - nb.r, nb.r * 2, nb.r * 2);
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawObjects() {
@@ -395,6 +433,8 @@ function drawObjects() {
     else if (item.type === "cell") drawCell(item);
     else if (item.type === "bomb") drawBomb(item);
     else if (item.type === "boost") drawBoost(item);
+    else if (item.type === "magnet") drawMagnet(item);
+    else if (item.type === "golden") drawGolden(item);
     else drawShard(item);
     ctx.restore();
   }
@@ -610,7 +650,12 @@ function updateHud() {
   scoreValue.textContent = game.score;
   bestValue.textContent = game.best;
   timeValue.textContent = Math.ceil(game.remaining);
-  shieldBar.style.width = `${(player.shield / player.maxShield) * 100}%`;
+  const sp = (player.shield / player.maxShield) * 100;
+  shieldBar.style.width = sp + '%';
+  shieldBar.classList.toggle('shield-low', sp < 30);
+  if(bombBadge){ bombBadge.classList.toggle('is-hidden', game.bombs<=0); if(bombCountEl) bombCountEl.textContent=game.bombs; }
+  if(magnetBadge){ magnetBadge.classList.toggle('is-hidden', game.magnetTimer<=0); if(magnetTimerEl) magnetTimerEl.textContent=Math.ceil(game.magnetTimer)+'s'; }
+  if(boostBadge){ boostBadge.classList.toggle('is-hidden', game.boostTimer<=0); if(boostTimerBadgeEl) boostTimerBadgeEl.textContent=Math.ceil(game.boostTimer)+'s'; }
 }
 
 function resetPlayer() {
@@ -827,4 +872,79 @@ function drawBoost(item) {
   ctx.shadowBlur = 0;
   ctx.fillStyle = '#ffc857'; ctx.font = `${r}px Inter,sans-serif`;
   ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('⚡', 0, 1);
+}
+function drawMagnet(item) {
+  const r = item.radius;
+  ctx.shadowColor = '#ff6fff'; ctx.shadowBlur = 16;
+  ctx.fillStyle = '#301030'; ctx.strokeStyle = '#ff6fff'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.arc(0, 0, r, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0;
+  ctx.fillStyle = '#ff6fff'; ctx.font = `${r}px Inter,sans-serif`;
+  ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText('🧲', 0, 1);
+}
+function drawGolden(item) {
+  const r = item.radius;
+  ctx.shadowColor = '#f7c948'; ctx.shadowBlur = 22;
+  ctx.fillStyle = '#f7c948';
+  ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+  ctx.beginPath();
+  for (let i = 0; i < 5; i++) {
+    const a = (Math.PI * 2 * i) / 5 - Math.PI / 2;
+    const a2 = a + Math.PI / 5;
+    const ox = Math.cos(a) * r * 1.2, oy = Math.sin(a) * r * 1.2;
+    const ix = Math.cos(a2) * r * 0.5, iy = Math.sin(a2) * r * 0.5;
+    i === 0 ? ctx.moveTo(ox, oy) : ctx.lineTo(ox, oy);
+    ctx.lineTo(ix, iy);
+  }
+  ctx.closePath(); ctx.fill(); ctx.stroke();
+  ctx.shadowBlur = 0;
+}
+function attractShards(dt) {
+  const range = 180;
+  for (const item of objects) {
+    if (item.type !== 'shard' && item.type !== 'golden') continue;
+    const dx = player.x - item.x, dy = player.y - item.y;
+    const dist = Math.hypot(dx, dy);
+    if (dist < range && dist > 1) {
+      const f = (1 - dist / range) * 600 * dt;
+      item.vx += (dx / dist) * f;
+      item.vy += (dy / dist) * f;
+    }
+  }
+}
+function addFloatingText(x, y, text, color) {
+  floatingTexts.push({ x, y, text, color, life: 1, maxLife: 1 });
+}
+function updateFloatingTexts(dt) {
+  for (let i = floatingTexts.length - 1; i >= 0; i--) {
+    const ft = floatingTexts[i];
+    ft.life -= dt;
+    ft.y -= 60 * dt;
+    if (ft.life <= 0) floatingTexts.splice(i, 1);
+  }
+}
+function drawFloatingTexts() {
+  for (const ft of floatingTexts) {
+    const a = Math.max(0, ft.life / ft.maxLife);
+    ctx.globalAlpha = a;
+    ctx.fillStyle = ft.color;
+    ctx.font = '800 16px Inter,sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(ft.text, ft.x, ft.y);
+  }
+  ctx.globalAlpha = 1;
+}
+function calcGrade(score) {
+  if (score >= 800) return 'S';
+  if (score >= 500) return 'A';
+  if (score >= 300) return 'B';
+  if (score >= 150) return 'C';
+  return 'D';
+}
+function buildNebulae() {
+  nebulae.length = 0;
+  const colors = ['#62e3ff','#b89cff','#ff6fff','#55ef9f'];
+  for (let i = 0; i < 4; i++) {
+    nebulae.push({ x: Math.random() * 1400, y: Math.random() * 900, r: random(150, 350), alpha: random(0.5, 1), color: colors[i % colors.length] });
+  }
 }

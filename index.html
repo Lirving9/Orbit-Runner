@@ -21,6 +21,11 @@
           <div class="meter-track"><span id="shieldBar"></span></div>
         </div>
       </section>
+      <div class="status-badges" id="statusBadges">
+        <div class="badge badge-bomb is-hidden" id="bombBadge">💣 <span id="bombCount">0</span></div>
+        <div class="badge badge-magnet is-hidden" id="magnetBadge">🧲 <span id="magnetTimer">0s</span></div>
+        <div class="badge badge-boost is-hidden" id="boostBadge">⚡ <span id="boostTimerBadge">0s</span></div>
+      </div>
 
       <div class="top-actions">
         <button class="icon-button" id="soundBtn" type="button" aria-label="Sound" title="Sound">🔊</button>
@@ -49,6 +54,7 @@
 
       <section class="modal-panel is-hidden" id="endPanel" aria-label="Run result">
         <p class="kicker" id="resultLabel">RUN COMPLETE</p>
+        <div class="grade-row"><span class="grade" id="gradeLabel">A</span></div>
         <h2 id="finalScore">0</h2>
         <div class="result-grid">
           <div><span class="stat-label">BEST</span><strong id="finalBest">0</strong></div>
