@@ -24,7 +24,8 @@ button{color:inherit;font:inherit}
 .top-actions{position:absolute;z-index:3;top:max(16px,env(safe-area-inset-top));right:max(16px,env(safe-area-inset-right));display:flex;gap:8px}
 .icon-button,.touch-button,.play-button{display:grid;place-items:center;border:1px solid var(--line);background:rgba(10,12,16,.72);backdrop-filter:blur(16px);box-shadow:0 18px 48px rgba(0,0,0,.25);cursor:pointer;transition:transform 140ms ease,border-color 140ms ease,background 140ms ease}
 .icon-button{width:48px;height:48px;border-radius:8px;font-size:1.2rem}
-.icon-button:hover,.touch-button:hover,.play-button:hover{border-color:rgba(98,227,255,.65);background:rgba(19,23,30,.78);transform:translateY(-1px)}
+.icon-button:hover,.touch-button:hover{border-color:rgba(98,227,255,.65);background:rgba(19,23,30,.78);transform:translateY(-1px)}
+.play-button:hover{transform:translateY(-2px);box-shadow:0 25px 65px rgba(85,239,159,.4),inset 0 0 0 1px rgba(255,255,255,.5);filter:brightness(1.1)}
 .icon-button:active,.touch-button:active,.play-button:active{transform:translateY(1px) scale(.98)}
 svg{width:24px;height:24px;fill:none;stroke:currentColor;stroke-linecap:round;stroke-linejoin:round;stroke-width:2.2}
 .play-button svg{width:38px;height:38px}

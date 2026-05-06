@@ -195,7 +195,8 @@ function endGame(completed) {
   if(gradeLabel){ const g=calcGrade(game.score); gradeLabel.textContent=g; gradeLabel.className='grade'+(g==='S'?' grade-s':g==='D'?' grade-d':''); }
   setPanelVisibility(endPanel, true);
   setPauseIcon(true);
-  playSound(completed?660:220, 0.4);
+  if (!completed) playNoise(0.6);
+  playSound(completed ? 660 : 150, completed ? 0.4 : 0.6, completed ? 'sine' : 'square');
 }
 
 function updateGame(dt) {
@@ -280,7 +281,8 @@ function checkCollisions() {
       game.combo = 0;
       addBurst(item.x, item.y, "#ff6f61", 24);
       triggerShake();
-      playSound(180, 0.3);
+      playNoise(0.4);
+      playSound(100, 0.4, 'square');
       if (player.shield <= 0) endGame(false);
       continue;
     }
@@ -358,6 +360,10 @@ function updateBackground(dt) {
       star.speed = random(20, 95);
     }
   }
+  for (const nb of nebulae) {
+    nb.x -= 15 * dt;
+    if (nb.x < -nb.r) nb.x = view.width + nb.r;
+  }
 }
 
 function updateParticles(dt) {
@@ -374,6 +380,8 @@ function updateParticles(dt) {
 }
 
 function draw() {
+  ctx.lineJoin = "round";
+  ctx.lineCap = "round";
   ctx.clearRect(0, 0, view.width, view.height);
   drawSpace();
   drawObjects();
@@ -523,6 +531,8 @@ function drawMeteor(item) {
 }
 
 function drawParticles() {
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
   for (const part of particles) {
     const alpha = Math.max(0, part.life / part.maxLife);
     ctx.globalAlpha = alpha;
@@ -531,7 +541,7 @@ function drawParticles() {
     ctx.arc(part.x, part.y, part.size * alpha, 0, Math.PI * 2);
     ctx.fill();
   }
-  ctx.globalAlpha = 1;
+  ctx.restore();
 }
 
 function drawPlayer() {
@@ -551,6 +561,8 @@ function drawPlayer() {
     thrust.addColorStop(0, "#62e3ff");
     thrust.addColorStop(0.48, "#ffc857");
     thrust.addColorStop(1, "rgba(255, 111, 97, 0)");
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
     ctx.fillStyle = thrust;
     ctx.beginPath();
     ctx.moveTo(-8, 14);
@@ -558,6 +570,7 @@ function drawPlayer() {
     ctx.lineTo(8, 14);
     ctx.closePath();
     ctx.fill();
+    ctx.restore();
   }
 
   ctx.shadowColor = "#62e3ff";
@@ -803,7 +816,8 @@ function clamp(value, min, max) {
 function useBomb() {
   if (game.bombs <= 0) return;
   game.bombs--;
-  playSound(300, 0.4);
+  playNoise(0.5);
+  playSound(150, 0.5, 'square');
   for (let i = objects.length - 1; i >= 0; i--) {
     if (objects[i].type === "meteor") {
       addBurst(objects[i].x, objects[i].y, "#b89cff", 12);
@@ -841,18 +855,40 @@ function showCombo(n) {
   comboLabelEl.style.animation = '';
   setTimeout(() => comboLabelEl.classList.add('is-hidden'), 1100);
 }
-function playSound(freq, dur) {
+function playSound(freq, dur, type='sine') {
   if (!soundOn) return;
   try {
     if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
     const o = audioCtx.createOscillator();
     const g = audioCtx.createGain();
-    o.type = 'sine';
+    o.type = type;
     o.frequency.setValueAtTime(freq, audioCtx.currentTime);
-    g.gain.setValueAtTime(0.15, audioCtx.currentTime);
+    if (type === 'square') o.frequency.exponentialRampToValueAtTime(10, audioCtx.currentTime + dur);
+    g.gain.setValueAtTime(type === 'square' ? 0.05 : 0.15, audioCtx.currentTime);
     g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
     o.connect(g).connect(audioCtx.destination);
     o.start(); o.stop(audioCtx.currentTime + dur);
+  } catch(e) {}
+}
+function playNoise(dur) {
+  if (!soundOn) return;
+  try {
+    if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+    const bufferSize = audioCtx.sampleRate * dur;
+    const buffer = audioCtx.createBuffer(1, bufferSize, audioCtx.sampleRate);
+    const data = buffer.getChannelData(0);
+    for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+    const noise = audioCtx.createBufferSource();
+    noise.buffer = buffer;
+    const f = audioCtx.createBiquadFilter();
+    f.type = 'lowpass'; f.frequency.value = 1000;
+    const g = audioCtx.createGain();
+    g.gain.setValueAtTime(0.3, audioCtx.currentTime);
+    g.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + dur);
+    noise.connect(f).connect(g).connect(audioCtx.destination);
+    noise.start();
   } catch(e) {}
 }
 function drawBomb(item) {
