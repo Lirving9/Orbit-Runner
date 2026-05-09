@@ -5,7 +5,15 @@
     <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
     <meta name="theme-color" content="#07080b">
     <title>Orbit Runner</title>
-    <meta name="description" content="Orbit Runner — a fast-paced 60-second space survival game.">
+    <meta name="description" content="Orbit Runner — a fast-paced 60-second space survival arcade game playable in the browser.">
+    <meta property="og:title" content="Orbit Runner">
+    <meta property="og:description" content="A fast-paced 60-second space survival arcade game.">
+    <meta property="og:type" content="website">
+    <meta property="og:image" content="orbit-runner-smoke.png">
+    <meta name="twitter:card" content="summary_large_image">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
+    <link rel="apple-touch-icon" href="favicon.svg">
+    <link rel="manifest" href="manifest.webmanifest">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;700;800;900&display=swap" rel="stylesheet">
@@ -28,11 +36,12 @@
         <div class="badge badge-bomb is-hidden" id="bombBadge">💣 <span id="bombCount">0</span></div>
         <div class="badge badge-magnet is-hidden" id="magnetBadge">🧲 <span id="magnetTimer">0s</span></div>
         <div class="badge badge-boost is-hidden" id="boostBadge">⚡ <span id="boostTimerBadge">0s</span></div>
+        <div class="badge badge-combo is-hidden" id="comboBadge">🔥 <span id="comboCount">0</span>x</div>
       </div>
 
       <div class="top-actions">
-        <button class="icon-button" id="soundBtn" type="button" aria-label="Sound" title="Sound">🔊</button>
-        <button class="icon-button" id="pauseButton" type="button" aria-label="Pause" title="Pause">
+        <button class="icon-button" id="soundBtn" type="button" aria-label="Sound" title="Sound (M)">🔊</button>
+        <button class="icon-button" id="pauseButton" type="button" aria-label="Pause" title="Pause (Space)">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M8 5v14M16 5v14"></path></svg>
         </button>
       </div>
@@ -40,19 +49,31 @@
       <div class="toast is-hidden" id="toast"></div>
       <div class="wave-label is-hidden" id="waveLabel"></div>
       <div class="combo-label is-hidden" id="comboLabel"></div>
+      <div class="achievement is-hidden" id="achievement"></div>
+      <div class="damage-flash" id="damageFlash" aria-hidden="true"></div>
 
       <section class="modal-panel" id="startPanel" aria-label="Start game">
         <p class="kicker">60 SECOND RUN</p>
         <h1>Orbit Runner</h1>
-        <div class="diff-row">
-          <button class="diff-btn" data-diff="easy">EASY</button>
-          <button class="diff-btn is-active" data-diff="normal">NORMAL</button>
-          <button class="diff-btn" data-diff="hard">HARD</button>
+        <div class="diff-row" role="tablist" aria-label="Difficulty">
+          <button class="diff-btn" data-diff="easy" role="tab">EASY</button>
+          <button class="diff-btn is-active" data-diff="normal" role="tab">NORMAL</button>
+          <button class="diff-btn" data-diff="hard" role="tab">HARD</button>
         </div>
         <button class="play-button" id="startButton" type="button" aria-label="Start" title="Start">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M7 4.8v14.4L18.5 12 7 4.8Z"></path></svg>
         </button>
-        <p class="hint">WASD / Arrows · Space pause · B bomb</p>
+        <p class="hint">WASD / Arrows · Space pause · B bomb · M mute</p>
+        <details class="help">
+          <summary>How to play</summary>
+          <ul>
+            <li><strong>Shards</strong> build a combo — each pickup raises your multiplier.</li>
+            <li><strong>Meteors</strong> break your shield. Dodge or bomb them.</li>
+            <li><strong>Cells</strong> repair shield, <strong>Bombs</strong> stock up (press B).</li>
+            <li><strong>Boost</strong> doubles thrust, <strong>Magnet</strong> attracts shards.</li>
+            <li>Clear 60 s with the highest score to earn an <strong>S rank</strong>.</li>
+          </ul>
+        </details>
       </section>
 
       <section class="modal-panel is-hidden" id="endPanel" aria-label="Run result">
@@ -65,9 +86,18 @@
           <div><span class="stat-label">SHARDS</span><strong id="finalShards">0</strong></div>
           <div><span class="stat-label">DODGED</span><strong id="finalDodged">0</strong></div>
         </div>
-        <button class="play-button" id="restartButton" type="button" aria-label="Restart" title="Restart">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4.5v5h5"></path></svg>
-        </button>
+        <div class="leaderboard" id="leaderboard" aria-label="Top scores">
+          <p class="lb-title">TOP RUNS</p>
+          <ol id="leaderboardList"></ol>
+        </div>
+        <div class="button-row">
+          <button class="play-button" id="restartButton" type="button" aria-label="Restart" title="Restart">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 12a9 9 0 1 0 3-6.7M3 4.5v5h5"></path></svg>
+          </button>
+          <button class="icon-button share-btn" id="shareButton" type="button" aria-label="Share" title="Share">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 12v7a1 1 0 0 0 1 1h14a1 1 0 0 0 1-1v-7M16 6l-4-4-4 4M12 2v14"></path></svg>
+          </button>
+        </div>
       </section>
 
       <nav class="touch-controls" aria-label="Touch controls">
@@ -79,6 +109,9 @@
         </button>
         <button class="touch-button" id="rightButton" type="button" aria-label="Right">
           <svg viewBox="0 0 24 24" aria-hidden="true"><path d="m9 6 6 6-6 6"></path></svg>
+        </button>
+        <button class="touch-button bomb" id="bombButton" type="button" aria-label="Bomb">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="14" r="6"></circle><path d="M12 8V4M12 4l3-2M12 4l-3-2"></path></svg>
         </button>
       </nav>
     </main>

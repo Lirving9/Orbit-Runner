@@ -1,0 +1,20 @@
+{
+  "name": "Orbit Runner",
+  "short_name": "Orbit Runner",
+  "description": "A fast-paced 60-second space survival arcade game.",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#07080b",
+  "theme_color": "#07080b",
+  "categories": ["games", "entertainment"],
+  "icons": [
+    {
+      "src": "favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
